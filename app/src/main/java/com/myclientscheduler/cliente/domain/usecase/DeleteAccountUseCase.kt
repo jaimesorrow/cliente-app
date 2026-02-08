@@ -18,10 +18,13 @@ class DeleteAccountUseCase {
             user.role == Role.STAFF -> Result.success(
                 DeletionPlan(true, Instant.now().plus(30, ChronoUnit.DAYS), false, "Delete user identity only")
             )
-            ownerCount <= 1 -> Result.success(
+            ownerCount <= 0 -> Result.failure(IllegalStateException("Owner count must be positive"))
+            ownerCount == 1 -> Result.success(
                 DeletionPlan(true, Instant.now().plus(30, ChronoUnit.DAYS), true, "Delete Account & Close Business")
             )
-            else -> Result.failure(IllegalStateException("At least one owner must remain"))
+            else -> Result.success(
+                DeletionPlan(true, Instant.now().plus(30, ChronoUnit.DAYS), false, "Delete user identity only")
+            )
         }
     }
 }

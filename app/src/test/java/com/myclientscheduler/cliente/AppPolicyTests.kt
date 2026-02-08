@@ -49,6 +49,19 @@ class AppPolicyTests {
         assertThat(plan.deactivateNow).isTrue()
     }
 
+    @Test fun `delete flow allows non-last owner removal`() {
+        val useCase = DeleteAccountUseCase()
+        val plan = useCase.plan(UserContext("o", "b", Role.OWNER), ownerCount = 2).getOrThrow()
+        assertThat(plan.closesBusiness).isFalse()
+        assertThat(plan.copy).isEqualTo("Delete user identity only")
+    }
+
+    @Test fun `delete flow rejects non-positive owner count`() {
+        val useCase = DeleteAccountUseCase()
+        val result = useCase.plan(UserContext("o", "b", Role.OWNER), ownerCount = 0)
+        assertThat(result.isFailure).isTrue()
+    }
+
     @Test fun `back stack sanitizer prevents leakage`() {
         val sanitizer = BackStackSanitizer()
         val safe = sanitizer.sanitize("settings", setOf("dashboard", "clients"), "dashboard")
