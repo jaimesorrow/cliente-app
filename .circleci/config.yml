@@ -1,0 +1,104 @@
+version: 2.1
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Optimizations applied:
+#   1. circleci/android orb — pre-warmed Android SDK, managed Gradle caches
+#   2. android-machine executor — avoids Docker layer overhead for native tooling
+#   3. large resource class for Gradle jobs — prevents OOM with -Xmx2g from
+#      gradle.properties; medium is fine for the lighter lint job
+#   4. Gradle build cache restored per-job — incremental task reuse across runs
+#   5. --no-daemon --build-cache --parallel — CI-safe, speed-optimised Gradle flags
+#   6. lint and unit-test run in parallel; build-debug gates on both passing
+#   7. store_test_results — surfaces JUnit trends and failure diffs in CircleCI UI
+#   8. google-services.json injection — required by the google-services plugin at
+#      configuration time; store the file as a base64 env var GOOGLE_SERVICES_JSON
+#      in CircleCI project settings before triggering a build
+# ──────────────────────────────────────────────────────────────────────────────
+
+orbs:
+  android: circleci/android@2.5.0
+
+jobs:
+  unit-test:
+    executor:
+      name: android/android-machine
+      resource-class: large
+      tag: 2024.04.1
+    steps:
+      - checkout
+      - run:
+          name: Inject google-services.json
+          command: echo "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
+      - android/restore-gradle-cache
+      - android/restore-build-cache
+      - run:
+          name: Run unit tests
+          command: >-
+            ./gradlew testDebugUnitTest
+            --no-daemon
+            --build-cache
+            --parallel
+      - android/save-gradle-cache
+      - android/save-build-cache
+      - store_test_results:
+          path: app/build/test-results
+      - store_artifacts:
+          path: app/build/reports/tests/testDebugUnitTest
+          destination: unit-test-report
+
+  lint:
+    executor:
+      name: android/android-machine
+      resource-class: medium
+      tag: 2024.04.1
+    steps:
+      - checkout
+      - run:
+          name: Inject google-services.json
+          command: echo "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
+      - android/restore-gradle-cache
+      - run:
+          name: Run Android lint
+          command: >-
+            ./gradlew lintDebug
+            --no-daemon
+            --build-cache
+      - android/save-gradle-cache
+      - store_artifacts:
+          path: app/build/reports/lint-results-debug.html
+          destination: lint-report
+
+  build-debug:
+    executor:
+      name: android/android-machine
+      resource-class: large
+      tag: 2024.04.1
+    steps:
+      - checkout
+      - run:
+          name: Inject google-services.json
+          command: echo "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
+      - android/restore-gradle-cache
+      - android/restore-build-cache
+      - run:
+          name: Assemble debug APK
+          command: >-
+            ./gradlew assembleDebug
+            --no-daemon
+            --build-cache
+            --parallel
+      - android/save-gradle-cache
+      - android/save-build-cache
+      - store_artifacts:
+          path: app/build/outputs/apk/debug
+          destination: debug-apk
+
+workflows:
+  build-and-test:
+    jobs:
+      - unit-test
+      - lint
+      - build-debug:
+          requires:
+            - unit-test
+            - lint
