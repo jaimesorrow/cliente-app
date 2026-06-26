@@ -5,7 +5,7 @@ import com.myclientscheduler.cliente.core.model.*
 import com.myclientscheduler.cliente.core.rbac.AppRoute
 import com.myclientscheduler.cliente.core.rbac.PermissionPolicy
 import com.myclientscheduler.cliente.core.time.ConflictDetector
-import com.myclientscheduler.cliente.core.util.BackStackSanitizer
+import com.myclientscheduler.cliente.core.util.sanitizeBackStack
 import com.myclientscheduler.cliente.data.repo.InMemoryRepository
 import com.myclientscheduler.cliente.domain.usecase.DeleteAccountUseCase
 import kotlinx.coroutines.runBlocking
@@ -50,8 +50,7 @@ class AppPolicyTests {
     }
 
     @Test fun `back stack sanitizer prevents leakage`() {
-        val sanitizer = BackStackSanitizer()
-        val safe = sanitizer.sanitize("settings", setOf("dashboard", "clients"), "dashboard")
+        val safe = sanitizeBackStack("settings", setOf("dashboard", "clients"), "dashboard")
         assertThat(safe).isEqualTo("dashboard")
     }
 }

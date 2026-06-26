@@ -19,13 +19,15 @@ sealed class AppRoute(val path: String, val ownerOnly: Boolean) {
 
 object PermissionPolicy {
     fun canAccessRoute(route: AppRoute, user: UserContext): Boolean =
-        !route.ownerOnly || user.role == Role.OWNER
+        !route.ownerOnly || user.isOwner()
 
-    fun canEditTemplates(user: UserContext): Boolean = user.role == Role.OWNER
-    fun canEditServices(user: UserContext): Boolean = user.role == Role.OWNER
-    fun canEditAvailability(user: UserContext): Boolean = user.role == Role.OWNER
-    fun canViewAnalytics(user: UserContext): Boolean = user.role == Role.OWNER
-    fun canEditSettings(user: UserContext): Boolean = user.role == Role.OWNER
+    fun canEditTemplates(user: UserContext): Boolean = user.isOwner()
+    fun canEditServices(user: UserContext): Boolean = user.isOwner()
+    fun canEditAvailability(user: UserContext): Boolean = user.isOwner()
+    fun canViewAnalytics(user: UserContext): Boolean = user.isOwner()
+    fun canEditSettings(user: UserContext): Boolean = user.isOwner()
     fun canManageClients(user: UserContext): Boolean = true
     fun canManageAppointments(user: UserContext): Boolean = true
+
+    private fun UserContext.isOwner() = role == Role.OWNER
 }
