@@ -16,12 +16,23 @@ class AppointmentCoordinator {
     private val lock = Mutex()
     private val appointments = mutableMapOf<String, Appointment>()
     private val logs = mutableListOf<AppointmentAuditLog>()
-    private val idempotencyGuard = mutableSetOf<String>()
-    private val timeOffBlocks = mutableListOf<TimeOffBlock>()
 
-    suspend fun upsertTimeOff(block: TimeOffBlock) = lock.withLock { timeOffBlocks.add(block) }
+    // Bounded LRU-style set: evict oldest entries when over capacity to prevent unbounded growth
+    // while still rejecting duplicate keys seen recently.
+    private val idempotencyGuard = LinkedHashMap<String, Unit>(64, 0.75f, true)
+    private val idempotencyGuardMaxSize = 1_000
+
+    // True upsert: keyed by block.id so repeated calls with the same id replace rather than append.
+    private val timeOffBlocks = mutableMapOf<String, TimeOffBlock>()
+
+    suspend fun upsertTimeOff(block: TimeOffBlock) = lock.withLock {
+        timeOffBlocks[block.id] = block
+    }
 
     suspend fun create(appointment: Appointment): Result<Appointment> = lock.withLock {
+        if (!appointment.startsAt.isBefore(appointment.endsAt)) {
+            return Result.failure(IllegalArgumentException("startsAt must be before endsAt"))
+        }
         if (hasConflict(appointment.startsAt, appointment.endsAt, null)) {
             return Result.failure(IllegalStateException("Conflict with existing booking or time-off"))
         }
@@ -38,7 +49,10 @@ class AppointmentCoordinator {
         reason: String,
         idempotencyKey: String,
     ): Result<Appointment> = lock.withLock {
-        if (!idempotencyGuard.add(idempotencyKey)) {
+        if (!newStart.isBefore(newEnd)) {
+            return Result.failure(IllegalArgumentException("newStart must be before newEnd"))
+        }
+        if (!trackIdempotency(idempotencyKey)) {
             return Result.success(appointments[appointmentId] ?: return Result.failure(NoSuchElementException()))
         }
         val existing = appointments[appointmentId] ?: return Result.failure(NoSuchElementException())
@@ -73,7 +87,7 @@ class AppointmentCoordinator {
         reason: String?,
         idempotencyKey: String,
     ): Result<Appointment> = lock.withLock {
-        if (!idempotencyGuard.add(idempotencyKey)) {
+        if (!trackIdempotency(idempotencyKey)) {
             return Result.success(appointments[appointmentId] ?: return Result.failure(NoSuchElementException()))
         }
         val existing = appointments[appointmentId] ?: return Result.failure(NoSuchElementException())
@@ -103,8 +117,18 @@ class AppointmentCoordinator {
 
     suspend fun listLogs(): List<AppointmentAuditLog> = lock.withLock { logs.toList() }
 
+    /** Returns true if the key is new (should proceed), false if duplicate (should return cached). */
+    private fun trackIdempotency(key: String): Boolean {
+        if (idempotencyGuard.containsKey(key)) return false
+        idempotencyGuard[key] = Unit
+        if (idempotencyGuard.size > idempotencyGuardMaxSize) {
+            idempotencyGuard.iterator().also { it.next(); it.remove() }
+        }
+        return true
+    }
+
     private fun hasConflict(start: LocalDateTime, end: LocalDateTime, ignoreAppointmentId: String?): Boolean {
-        val blockedByTimeOff = timeOffBlocks.any { overlaps(start, end, it.startsAt, it.endsAt) }
+        val blockedByTimeOff = timeOffBlocks.values.any { overlaps(start, end, it.startsAt, it.endsAt) }
         val blockedByAppointment = appointments.values
             .filter { it.id != ignoreAppointmentId && it.status != AppointmentStatus.CANCELED }
             .any { overlaps(start, end, it.startsAt, it.endsAt) }

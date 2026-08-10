@@ -73,7 +73,13 @@ private fun ClienteApp() {
                         onToggleRole = { role = if (role == Role.OWNER) Role.STAFF else Role.OWNER },
                         onToggleOffline = { offline.value = !offline.value },
                         onContact = { action ->
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(action))
+                            val uri = Uri.parse(action)
+                            val intent = when (uri.scheme) {
+                                "tel" -> Intent(Intent.ACTION_DIAL, uri)
+                                "smsto", "sms" -> Intent(Intent.ACTION_SENDTO, uri)
+                                "mailto" -> Intent(Intent.ACTION_SENDTO, uri)
+                                else -> Intent(Intent.ACTION_VIEW, uri)
+                            }
                             startActivity(intent)
                         },
                     )

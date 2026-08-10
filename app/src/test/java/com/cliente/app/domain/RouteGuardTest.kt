@@ -13,6 +13,7 @@ class RouteGuardTest {
         assertFalse(RouteGuard.canAccess(AppRoute.Settings, Role.STAFF))
         assertFalse(RouteGuard.canAccess(AppRoute.Analytics, Role.STAFF))
         assertFalse(RouteGuard.canAccess(AppRoute.Availability, Role.STAFF))
+        assertFalse(RouteGuard.canAccess(AppRoute.Services, Role.STAFF))
     }
 
     @Test
