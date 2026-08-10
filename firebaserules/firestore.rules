@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function role() {
+      return get(/databases/$(database)/documents/businessUsers/$(request.auth.uid)).data.role;
+    }
+    function businessId() {
+      return get(/databases/$(database)/documents/businessUsers/$(request.auth.uid)).data.businessId;
+    }
+    function sameBusiness(docBusinessId) { return signedIn() && businessId() == docBusinessId; }
+    function isOwner() { return role() == 'OWNER'; }
+
+    match /businessUsers/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /businesses/{bizId} {
+      allow read: if sameBusiness(bizId);
+      allow update: if sameBusiness(bizId) && isOwner();
+      allow create, delete: if false;
+    }
+
+    match /businesses/{bizId}/{collection}/{docId} {
+      allow read: if sameBusiness(bizId);
+      allow create, update, delete: if sameBusiness(bizId)
+        && (
+          (collection in ['clients','appointments'] )
+          || (isOwner() && collection in ['services','templates','availability','analytics','settings'])
+        );
+    }
+
+    match /businesses/{bizId}/auditLogs/{docId} {
+      allow read: if sameBusiness(bizId);
+      allow create: if sameBusiness(bizId);
+      allow update, delete: if false; // append-only immutable
+    }
+  }
+}

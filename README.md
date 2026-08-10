@@ -1,53 +1,33 @@
 # Clientè (Android MVP)
 
-Provider-side luxury concierge scheduler for a single business tenant (`businessId`) using Kotlin + Jetpack Compose + Material3.
+Provider-side luxury booking concierge app built with Kotlin + Jetpack Compose + Material3.
 
-## Locked brand identity
-- App-facing name is **Clientè** (grave accent only on final è).
-- **MyClientScheduler** appears only in legal/account metadata references.
+## Locked identity
+- Product name: **Clientè** (single grave accent on final character only).
+- `MyClientScheduler` appears only in legal/account metadata.
 
-## MVP scope implemented
-- MVVM/Clean package layout with repository/use-case boundaries.
-- Room local cache foundation (`ClienteDatabase`) for indexed offline reads.
-- Firebase Auth + Firestore integration dependencies and security policy artifacts.
-- Strict RBAC (Owner vs Staff):
-  - Owner-only routes: `/availability`, `/analytics`, `/settings`.
-  - Staff can access Clients/Appointments and view/apply Templates.
-- Core modules stubs in Compose navigation:
-  - Clients CRM
-  - Services (archive-only behavior policy)
-  - Appointments with conflict detection and append-only audit events
-  - Calendar day/week shell
-  - Templates
-  - Availability
-  - Analytics (estimated revenue concept)
-  - Settings + legal hub + logout + delete/close business confirmation flow
-- Contact actions use platform intents only (call/text/email), no in-app messaging or payments.
-- Debug-only QA matrix screen with filter + Copy CSV (`BuildConfig.DEBUG` guard).
+## Scope constraints
+- No public client portal
+- No self-booking UI
+- No payments
+- No in-app messaging (device call/text/email intents only)
 
-## Data integrity highlights
-- Appointment status workflow: `SCHEDULED -> CONFIRMED -> COMPLETED|NO_SHOW|CANCELED`.
-- Concurrency-safe scheduling and updates via `Mutex` atomic checks.
-- Idempotency keys prevent duplicate log writes on double taps.
-- Conflict detection respects time-off blocks and ignores canceled appointments.
-- Immutable append-only audit records for status change/reschedule/cancel.
+## Architecture
+- MVVM + Repository + clean package boundaries
+- Room for local offline index/cache
+- Firebase Auth + Firestore sync model
+- Single-tenant membership per user (`businessId` exactly one)
+
+## RBAC
+- Roles: Owner, Staff
+- Owner-only routes: `/availability`, `/analytics`, `/settings` and descendants
+- Staff allowed: CRUD Clients/Appointments, view/apply Templates
+- Staff blocked from Services/Templates edits/Availability/Analytics/Settings/Export/Team
 
 ## Firestore artifacts
-- Rules: `firestore/firestore.rules`
-  - Tenant checks by `businessId`
-  - Owner-only writes for protected collections
-  - `appointmentAuditLogs` immutable (`update/delete` denied)
-- Indexes + cost controls: `firestore/firestore.indexes.json`
+See `firebaserules/firestore.rules` and `firebaserules/firestore.indexes.json`.
 
-## Tests
-- RBAC route guard tests
-- Conflict/idempotency/audit tests
-- Delete account/close business policy tests
-
-Run:
-
+## Run tests
 ```bash
 ./gradlew test
 ```
-
-> Secrets are intentionally omitted from source control.

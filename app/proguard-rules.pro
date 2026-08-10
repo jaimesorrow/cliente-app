@@ -1,1 +1,1 @@
-# Intentionally minimal for MVP
+# No custom rules in MVP.
