@@ -16,6 +16,10 @@
 *.nar
 *.ear
 *.zip
+
+# ...but the Gradle wrapper jar must be committed, or ./gradlew cannot run
+# on a fresh clone (and neither can CI).
+!gradle/wrapper/gradle-wrapper.jar
 *.tar.gz
 *.rar
 

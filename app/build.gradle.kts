@@ -50,6 +50,10 @@ dependencies {
     androidTestImplementation(bom)
 
     implementation("androidx.core:core-ktx:1.13.1")
+    // Supplies the Theme.Material3.* XML themes that res/values/themes.xml
+    // inherits from. The UI itself is Compose; this is only for the window
+    // theme applied before/around the Compose content.
+    implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.activity:activity-compose:1.9.1")
     implementation("androidx.compose.ui:ui")
