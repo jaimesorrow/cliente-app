@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function role() { return request.auth.token.role; }
+    function biz() { return request.auth.token.businessId; }
+    function owner() { return role() == 'OWNER'; }
+
+    match /businesses/{businessId} {
+      allow read: if signedIn() && biz() == businessId;
+      allow write: if signedIn() && biz() == businessId && owner();
+
+      match /clients/{docId} {
+        allow read, create, update: if signedIn() && biz() == businessId;
+        allow delete: if false;
+      }
+      match /appointments/{docId} {
+        allow read, create, update: if signedIn() && biz() == businessId;
+        allow delete: if false;
+      }
+      match /services/{docId}, /templates/{docId}, /availability/{docId}, /analytics/{docId}, /settings/{docId} {
+        allow read: if signedIn() && biz() == businessId;
+        allow write: if signedIn() && biz() == businessId && owner();
+      }
+      match /appointmentAuditLogs/{logId} {
+        allow read: if signedIn() && biz() == businessId;
+        allow create: if signedIn() && biz() == businessId;
+        allow update, delete: if false;
+      }
+      match /legalAcceptances/{docId} {
+        allow read, create: if signedIn() && biz() == businessId;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
