@@ -48,7 +48,7 @@ class InMemoryRepository {
         startsAt: LocalDateTime,
         operationToken: String,
     ): Result<Appointment> = lock.withLock {
-        if (!operationTokens.add(operationToken)) return@withLock Result.failure(IllegalStateException("Duplicate action"))
+        if (isDuplicate(operationToken)) return@withLock duplicateFailure()
         val service = services[serviceId] ?: return@withLock Result.failure(IllegalArgumentException("Service missing"))
         if (service.archived) return@withLock Result.failure(IllegalArgumentException("Service archived"))
         val endsAt = startsAt.plusMinutes(service.durationMin.toLong())
@@ -70,7 +70,7 @@ class InMemoryRepository {
         reason: String?,
         operationToken: String,
     ): Result<Appointment> = lock.withLock {
-        if (!operationTokens.add(operationToken)) return@withLock Result.failure(IllegalStateException("Duplicate action"))
+        if (isDuplicate(operationToken)) return@withLock duplicateFailure()
         val current = appointments[appointmentId] ?: return@withLock Result.failure(IllegalArgumentException("Missing"))
         val allowed = when (current.status) {
             AppointmentStatus.SCHEDULED -> setOf(AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELED)
@@ -80,20 +80,8 @@ class InMemoryRepository {
         if (toStatus !in allowed) return@withLock Result.failure(IllegalStateException("Invalid transition"))
         val next = current.copy(status = toStatus)
         appointments[appointmentId] = next
-        val entry = AuditEntry(
-            id = UUID.randomUUID().toString(),
-            appointmentId = appointmentId,
-            actorId = actor.userId,
-            actorRole = actor.role,
-            timestamp = Instant.now(),
-            action = if (toStatus == AppointmentStatus.CANCELED) "cancel" else "status_change",
-            fromStatus = current.status,
-            toStatus = toStatus,
-            oldDateTime = null,
-            newDateTime = null,
-            reason = reason,
-        )
-        auditLog[entry.id] = entry
+        val action = if (toStatus == AppointmentStatus.CANCELED) "cancel" else "status_change"
+        auditLog += buildAuditEntry(actor, appointmentId, action, current.status, toStatus, reason = reason)
         Result.success(next)
     }
 
@@ -104,7 +92,7 @@ class InMemoryRepository {
         reason: String,
         operationToken: String,
     ): Result<Appointment> = lock.withLock {
-        if (!operationTokens.add(operationToken)) return@withLock Result.failure(IllegalStateException("Duplicate action"))
+        if (isDuplicate(operationToken)) return@withLock duplicateFailure()
         val current = appointments[appointmentId] ?: return@withLock Result.failure(IllegalArgumentException("Missing"))
         val service = services[current.serviceId] ?: return@withLock Result.failure(IllegalArgumentException("Service missing"))
         val newEnd = newStart.plusMinutes(service.durationMin.toLong())
@@ -113,14 +101,32 @@ class InMemoryRepository {
         }
         val next = current.copy(startsAt = newStart, endsAt = newEnd)
         appointments[appointmentId] = next
-        val entry = AuditEntry(
-            id = UUID.randomUUID().toString(), appointmentId = appointmentId, actorId = actor.userId,
-            actorRole = actor.role, timestamp = Instant.now(), action = "reschedule", fromStatus = current.status,
-            toStatus = next.status, oldDateTime = current.startsAt, newDateTime = newStart, reason = reason,
-        )
-        auditLog[entry.id] = entry
+        auditLog += buildAuditEntry(actor, appointmentId, "reschedule", current.status, next.status, current.startsAt, newStart, reason)
         Result.success(next)
     }
 
     fun canMutateAuditLog(): Boolean = false
+
+    private fun isDuplicate(operationToken: String) = !operationTokens.add(operationToken)
+
+    private fun <T> duplicateFailure(): Result<T> = Result.failure(IllegalStateException("Duplicate action"))
+
+    private fun buildAuditEntry(
+        actor: UserContext,
+        appointmentId: String,
+        action: String,
+        fromStatus: AppointmentStatus?,
+        toStatus: AppointmentStatus?,
+        oldDateTime: LocalDateTime? = null,
+        newDateTime: LocalDateTime? = null,
+        reason: String? = null,
+    ): Pair<String, AuditEntry> {
+        val entry = AuditEntry(
+            id = UUID.randomUUID().toString(), appointmentId = appointmentId,
+            actorId = actor.userId, actorRole = actor.role, timestamp = Instant.now(),
+            action = action, fromStatus = fromStatus, toStatus = toStatus,
+            oldDateTime = oldDateTime, newDateTime = newDateTime, reason = reason,
+        )
+        return entry.id to entry
+    }
 }
